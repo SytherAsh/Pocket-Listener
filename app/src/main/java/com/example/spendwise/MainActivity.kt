@@ -69,6 +69,8 @@ import com.example.spendwise.ui.theme.SpendWiseTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 
 // Main dashboard activity — shows permission status, stats, and recent records
 class MainActivity : ComponentActivity() {
@@ -106,7 +108,7 @@ fun SpendWiseDashboard() {
     // Reactive state for SMS permission status
     var smsGranted by remember { mutableStateOf(false) }
     // Backend URL text field state
-    var backendUrl by remember { mutableStateOf("http://10.0.2.2:5000/api/data") }
+    var backendUrl by remember { mutableStateOf("http://192.168.1.105:8000/api/data") }
     // Total records count from the database
     var totalCount by remember { mutableIntStateOf(0) }
     // Pending (unsent) records count
@@ -115,6 +117,12 @@ fun SpendWiseDashboard() {
     val recentRecords = remember { mutableStateListOf<NotificationEntity>() }
     // Whether initial SMS read has been performed this session
     var smsReadDone by remember { mutableStateOf(false) }
+    // Connection test state: null = not tested, true = connected, false = failed
+    var connectionStatus by remember { mutableStateOf<Boolean?>(null) }
+    // Error message from the last connection test
+    var connectionError by remember { mutableStateOf("") }
+    // Whether a connection test is currently in progress
+    var connectionTesting by remember { mutableStateOf(false) }
 
     // Launcher for requesting SMS permission at runtime
     val smsPermissionLauncher = rememberLauncherForActivityResult(
@@ -250,16 +258,112 @@ fun SpendWiseDashboard() {
                             )
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        // Save button that persists the URL to SharedPreferences
-                        Button(
-                            onClick = {
-                                ApiSender.setBackendUrl(context, backendUrl)
-                                Toast.makeText(context, "URL saved!", Toast.LENGTH_SHORT).show()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
-                            shape = RoundedCornerShape(12.dp)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text("Save URL", color = Color.White)
+                            // Save button that persists the URL to SharedPreferences
+                            Button(
+                                onClick = {
+                                    ApiSender.setBackendUrl(context, backendUrl)
+                                    Toast.makeText(context, "URL saved!", Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("Save URL", color = Color.White)
+                            }
+                            // Test Connection button — pings the backend and shows result
+                            Button(
+                                onClick = {
+                                    connectionTesting = true
+                                    connectionStatus = null
+                                    connectionError = ""
+                                    scope.launch {
+                                        try {
+                                            val result = withContext(Dispatchers.IO) {
+                                                // Try to connect to the backend URL
+                                                val testUrl = backendUrl.trimEnd('/').removeSuffix("/api/data")
+                                                val url = URL("$testUrl/")
+                                                val conn = url.openConnection() as HttpURLConnection
+                                                conn.requestMethod = "GET"
+                                                conn.connectTimeout = 5000
+                                                conn.readTimeout = 5000
+                                                val code = conn.responseCode
+                                                conn.disconnect()
+                                                code
+                                            }
+                                            connectionStatus = result in 200..299
+                                            connectionError = if (connectionStatus == true) "HTTP $result OK" else "HTTP $result"
+                                        } catch (e: java.net.ConnectException) {
+                                            connectionStatus = false
+                                            connectionError = "Connection refused — is test.py running?"
+                                        } catch (e: java.net.SocketTimeoutException) {
+                                            connectionStatus = false
+                                            connectionError = "Timeout — wrong IP or firewall blocking?"
+                                        } catch (e: java.net.UnknownHostException) {
+                                            connectionStatus = false
+                                            connectionError = "Unknown host — check the IP address"
+                                        } catch (e: Exception) {
+                                            connectionStatus = false
+                                            connectionError = e.message ?: "Unknown error"
+                                        } finally {
+                                            connectionTesting = false
+                                        }
+                                    }
+                                },
+                                enabled = !connectionTesting,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF424242)
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    if (connectionTesting) "Testing..." else "Test Connection",
+                                    color = Color.White
+                                )
+                            }
+                        }
+                        // Show connection test result
+                        if (connectionStatus != null || connectionTesting) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            val bgColor = when {
+                                connectionTesting -> Color(0xFF424242)
+                                connectionStatus == true -> AccentGreen.copy(alpha = 0.15f)
+                                else -> AccentRed.copy(alpha = 0.15f)
+                            }
+                            val textColor = when {
+                                connectionTesting -> TextSecondary
+                                connectionStatus == true -> AccentGreen
+                                else -> AccentRed
+                            }
+                            val statusText = when {
+                                connectionTesting -> "⏳ Testing connection..."
+                                connectionStatus == true -> "✅ CONNECTED"
+                                else -> "❌ FAILED"
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(bgColor)
+                                    .padding(12.dp)
+                            ) {
+                                Column {
+                                    Text(
+                                        statusText,
+                                        color = textColor,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                    if (connectionError.isNotEmpty()) {
+                                        Text(
+                                            connectionError,
+                                            color = textColor.copy(alpha = 0.8f),
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }

@@ -17,7 +17,7 @@ object ApiSender {
     private const val TAG = "SPENDWISE_API"
     private const val PREFS_NAME = "spendwise_prefs"
     private const val KEY_BACKEND_URL = "backend_url"
-    private const val DEFAULT_URL = "http://10.0.2.2:5000/api/data"
+    private const val DEFAULT_URL = "http://10.0.2.2:8000/api/data"
 
     // Convert a NotificationEntity to a JSON string matching the required schema
     private fun entityToJson(entity: NotificationEntity): String {
