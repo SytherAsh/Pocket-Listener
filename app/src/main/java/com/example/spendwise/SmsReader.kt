@@ -37,38 +37,43 @@ object SmsReader {
         "Rs.", "INR", "₹", "transaction", "payment"
     )
 
-    // Read up to 1000 SMS messages sorted by date descending and save to Room DB
+    // Read ALL SMS messages and save only NEW ones to Room DB
     fun readAllSms(context: Context): List<NotificationEntity> {
         val results = mutableListOf<NotificationEntity>()
         val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
         val db = AppDatabase.getInstance(context)
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        
+        // Only read messages newer than what we already have
+        val lastStoredTimestamp = prefs.getLong(KEY_LAST_SMS_TIMESTAMP, 0L)
 
-        // Query the SMS content provider for all inbox messages
         val cursor = context.contentResolver.query(
             Telephony.Sms.CONTENT_URI,
             arrayOf(
                 Telephony.Sms._ID,
                 Telephony.Sms.ADDRESS,
                 Telephony.Sms.BODY,
-                Telephony.Sms.DATE,
-                Telephony.Sms.TYPE
+                Telephony.Sms.DATE
             ),
-            null,
-            null,
-            "${Telephony.Sms.DATE} DESC LIMIT 1000"
+            "${Telephony.Sms.DATE} > ?",
+            arrayOf(lastStoredTimestamp.toString()),
+            "${Telephony.Sms.DATE} ASC"
         )
+
+        var maxTimestamp = lastStoredTimestamp
 
         cursor?.use {
             val idxAddress = it.getColumnIndex(Telephony.Sms.ADDRESS)
             val idxBody = it.getColumnIndex(Telephony.Sms.BODY)
             val idxDate = it.getColumnIndex(Telephony.Sms.DATE)
 
-            // Iterate through each SMS row and map to NotificationEntity
             while (it.moveToNext()) {
                 val address = if (idxAddress >= 0) it.getString(idxAddress) else null
                 val body = if (idxBody >= 0) (it.getString(idxBody) ?: "") else ""
-                val dateMs = if (idxDate >= 0) it.getLong(idxDate) else System.currentTimeMillis()
+                val dateMs = if (idxDate >= 0) it.getLong(idxDate) else 0L
+
+                if (dateMs > maxTimestamp) maxTimestamp = dateMs
 
                 val entity = NotificationEntity(
                     id = UUID.randomUUID().toString(),
@@ -83,19 +88,18 @@ object SmsReader {
                     deviceId = deviceId,
                     sentToBackend = false
                 )
-
                 results.add(entity)
-
-                // Save each SMS entity to the local Room database
-                CoroutineScope(Dispatchers.IO).launch {
-                    db.dao().insert(entity)
-                }
-
-                Log.d(TAG, "SMS from ${address ?: "unknown"}: ${body.take(80)}")
+                
+                // Save to Room DB synchronously or in a controlled batch to avoid lag
+                db.dao().insert(entity)
             }
         }
+        
+        if (maxTimestamp > lastStoredTimestamp) {
+            prefs.edit().putLong(KEY_LAST_SMS_TIMESTAMP, maxTimestamp).apply()
+        }
 
-        Log.d(TAG, "Total SMS read: ${results.size}")
+        Log.d(TAG, "Read and saved ${results.size} new SMS")
         return results
     }
 

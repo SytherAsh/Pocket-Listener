@@ -104,7 +104,7 @@ fun SpendWiseDashboard() {
     val scope = rememberCoroutineScope()
 
     var smsGranted by remember { mutableStateOf(false) }
-    var backendUrl by remember { mutableStateOf("http://10.0.2.2:8000/api/data") }
+    var backendUrl by remember { mutableStateOf("http://192.168.1.105:8000/api/data") }
     var totalCount by remember { mutableIntStateOf(0) }
     var pendingCount by remember { mutableIntStateOf(0) }
     val recentRecords = remember { mutableStateListOf<NotificationEntity>() }
@@ -140,7 +140,22 @@ fun SpendWiseDashboard() {
                         SmsReader.startSmsObserver(context)
                     }
                 }
-                handler.postDelayed(this, 5000)
+
+                // Auto-check connection in background
+                scope.launch(Dispatchers.IO) {
+                    try {
+                        val url = URL(backendUrl.trimEnd('/').removeSuffix("/api/data"))
+                        val conn = url.openConnection() as HttpURLConnection
+                        conn.requestMethod = "GET"
+                        conn.connectTimeout = 3000
+                        val code = conn.responseCode
+                        connectionStatus = (code == 200)
+                        conn.disconnect()
+                    } catch (e: Exception) {
+                        connectionStatus = false
+                    }
+                }
+                handler.postDelayed(this, 10000)
             }
         }
         handler.post(runnable)
@@ -250,13 +265,28 @@ fun SpendWiseDashboard() {
                                 Button(onClick = { 
                                     ApiSender.setBackendUrl(context, backendUrl) 
                                     Toast.makeText(context, "URL Saved", Toast.LENGTH_SHORT).show()
+                                    // Trigger immediate test
+                                    scope.launch(Dispatchers.IO) {
+                                        try {
+                                            val url = URL(backendUrl.trimEnd('/').removeSuffix("/api/data"))
+                                            val conn = url.openConnection() as HttpURLConnection
+                                            conn.connectTimeout = 3000
+                                            val code = conn.responseCode
+                                            connectionStatus = (code == 200)
+                                            conn.disconnect()
+                                        } catch(e: Exception) { connectionStatus = false }
+                                    }
                                 }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = AccentBlue)) {
-                                    Text("Save URL")
+                                    Text("Save & Test")
                                 }
                                 Button(onClick = { 
-                                    scope.launch { ApiSender.retryUnsent(context) }
+                                    scope.launch { 
+                                        Toast.makeText(context, "Bulk Sync Started...", Toast.LENGTH_SHORT).show()
+                                        ApiSender.retryUnsent(context) 
+                                        Toast.makeText(context, "Sync Batch Finished", Toast.LENGTH_SHORT).show()
+                                    }
                                 }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
-                                    Text("Sync Now")
+                                    Text("Sync Bulk")
                                 }
                             }
                         }
