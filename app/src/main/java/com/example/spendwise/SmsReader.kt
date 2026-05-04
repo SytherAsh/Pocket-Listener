@@ -38,7 +38,7 @@ object SmsReader {
     )
 
     // Read ALL SMS messages and save only NEW ones to Room DB
-    fun readAllSms(context: Context): List<NotificationEntity> {
+    suspend fun readAllSms(context: Context): List<NotificationEntity> {
         val results = mutableListOf<NotificationEntity>()
         val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())

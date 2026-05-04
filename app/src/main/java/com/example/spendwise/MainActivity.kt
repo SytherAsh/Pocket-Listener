@@ -65,6 +65,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationManagerCompat
 import com.example.spendwise.db.AppDatabase
 import com.example.spendwise.db.NotificationEntity
 import com.example.spendwise.ui.theme.SpendWiseTheme
@@ -104,6 +105,7 @@ fun SpendWiseDashboard() {
     val scope = rememberCoroutineScope()
 
     var smsGranted by remember { mutableStateOf(false) }
+    var notifGranted by remember { mutableStateOf(false) }
     var backendUrl by remember { mutableStateOf("http://192.168.1.105:8000/api/data") }
     var totalCount by remember { mutableIntStateOf(0) }
     var pendingCount by remember { mutableIntStateOf(0) }
@@ -123,6 +125,7 @@ fun SpendWiseDashboard() {
         val runnable = object : Runnable {
             override fun run() {
                 smsGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
+                notifGranted = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
                 
                 scope.launch {
                     val db = AppDatabase.getInstance(context)
@@ -171,7 +174,9 @@ fun SpendWiseDashboard() {
                 },
                 actions = {
                     StatusIcon(label = "SMS", active = smsGranted)
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    StatusIcon(label = "NOTIFY", active = notifGranted)
+                    Spacer(modifier = Modifier.width(6.dp))
                     StatusIcon(label = "API", active = connectionStatus == true, isPending = connectionStatus == null)
                     Spacer(modifier = Modifier.width(16.dp))
                 },
@@ -188,7 +193,7 @@ fun SpendWiseDashboard() {
             // HERO CARD
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth().height(160.dp),
+                    modifier = Modifier.fillMaxWidth().height(180.dp),
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = SurfaceBg)
                 ) {
@@ -196,14 +201,24 @@ fun SpendWiseDashboard() {
                         Brush.verticalGradient(listOf(Color(0xFF2E2E4D), SurfaceBg))
                     )) {
                         Column(modifier = Modifier.padding(24.dp).align(Alignment.CenterStart)) {
-                            Text("Total Records Captured", color = TextSecondary, fontSize = 14.sp)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(totalCount.toString(), color = TextPrimary, fontSize = 42.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Column {
+                                    Text("Raw Captures", color = TextSecondary, fontSize = 12.sp)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(totalCount.toString(), color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text("Financial Transactions", color = TextSecondary, fontSize = 12.sp)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    // Dummy number as requested by user
+                                    Text("168", color = AccentGreen, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(if (pendingCount > 0) AccentRed else AccentGreen))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text(if (pendingCount > 0) "$pendingCount pending sync" else "All synced", color = TextSecondary, fontSize = 12.sp)
+                                Text(if (pendingCount > 0) "$pendingCount pending sync to Backend" else "All records synced to Backend", color = TextSecondary, fontSize = 12.sp)
                             }
                         }
                     }
@@ -247,6 +262,11 @@ fun SpendWiseDashboard() {
                             if (!smsGranted) {
                                 SystemActionChip("Grant SMS Permission") { 
                                     smsPermissionLauncher.launch(Manifest.permission.READ_SMS)
+                                }
+                            }
+                            if (!notifGranted) {
+                                SystemActionChip("Grant Notification Access") { 
+                                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                                 }
                             }
                             
