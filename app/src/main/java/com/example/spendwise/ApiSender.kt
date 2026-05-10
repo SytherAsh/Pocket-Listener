@@ -24,9 +24,15 @@ object ApiSender {
     private fun entityToJsonObject(entity: NotificationEntity): JSONObject {
         val json = JSONObject()
         json.put("id", entity.id)
-        json.put("source", "sms")
-        json.put("sender", entity.sender ?: JSONObject.NULL)
-        json.put("body", entity.body)
+        json.put("source", entity.source)
+        // For notifications, the app name (Paytm, etc.) is stored in title
+        val senderValue = entity.sender ?: entity.title ?: JSONObject.NULL
+        json.put("sender", senderValue)
+        
+        // Notifications sometimes have long bodies in bigText, prefer that if available
+        val bodyText = if (!entity.bigText.isNullOrEmpty()) entity.bigText else entity.body
+        json.put("body", bodyText)
+        
         json.put("timestamp_ms", entity.timestampMs)
         json.put("timestamp_human", entity.timestampHuman)
         json.put("device_id", entity.deviceId)

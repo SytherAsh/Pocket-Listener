@@ -63,6 +63,7 @@ object SmsReader {
 
         var maxTimestamp = lastStoredTimestamp
 
+        val batch = mutableListOf<NotificationEntity>()
         cursor?.use {
             val idxAddress = it.getColumnIndex(Telephony.Sms.ADDRESS)
             val idxBody = it.getColumnIndex(Telephony.Sms.BODY)
@@ -89,9 +90,16 @@ object SmsReader {
                     sentToBackend = false
                 )
                 results.add(entity)
+                batch.add(entity)
                 
                 // Save to Room DB synchronously or in a controlled batch to avoid lag
-                db.dao().insert(entity)
+                if (batch.size >= 500) {
+                    db.dao().insertAll(batch)
+                    batch.clear()
+                }
+            }
+            if (batch.isNotEmpty()) {
+                db.dao().insertAll(batch)
             }
         }
         

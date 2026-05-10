@@ -13,6 +13,10 @@ interface NotificationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: NotificationEntity)
 
+    // Insert a list of entities in bulk
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(entities: List<NotificationEntity>)
+
     // Retrieve all records that have not yet been sent to the backend
     @Query("SELECT * FROM notifications WHERE sentToBackend = 0")
     suspend fun getAllUnsent(): List<NotificationEntity>
@@ -24,6 +28,10 @@ interface NotificationDao {
     // Get the total count of all records in the database
     @Query("SELECT COUNT(*) FROM notifications")
     suspend fun getCount(): Int
+
+    // Get the count of unsent records in the database
+    @Query("SELECT COUNT(*) FROM notifications WHERE sentToBackend = 0")
+    suspend fun getUnsentCount(): Int
 
     // Get the 5 most recent records ordered by timestamp descending
     @Query("SELECT * FROM notifications ORDER BY timestampMs DESC LIMIT 5")

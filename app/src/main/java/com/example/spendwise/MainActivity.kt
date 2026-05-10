@@ -106,7 +106,7 @@ fun SpendWiseDashboard() {
 
     var smsGranted by remember { mutableStateOf(false) }
     var notifGranted by remember { mutableStateOf(false) }
-    var backendUrl by remember { mutableStateOf("http://192.168.1.105:8000/api/data") }
+    var backendUrl by remember { mutableStateOf("http://192.168.1.102:8000/api/data") }
     var totalCount by remember { mutableIntStateOf(0) }
     var pendingCount by remember { mutableIntStateOf(0) }
     val recentRecords = remember { mutableStateListOf<NotificationEntity>() }
@@ -130,7 +130,7 @@ fun SpendWiseDashboard() {
                 scope.launch {
                     val db = AppDatabase.getInstance(context)
                     totalCount = withContext(Dispatchers.IO) { db.dao().getCount() }
-                    pendingCount = withContext(Dispatchers.IO) { db.dao().getAllUnsent().size }
+                    pendingCount = withContext(Dispatchers.IO) { db.dao().getUnsentCount() }
                     val recent = withContext(Dispatchers.IO) { db.dao().getRecent() }
                     recentRecords.clear()
                     recentRecords.addAll(recent)
